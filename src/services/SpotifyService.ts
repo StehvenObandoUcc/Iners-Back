@@ -5,11 +5,13 @@ import { MusicSource } from '../domain/enums/MusicSource';
 
 export class SpotifyService implements IMusicSource {
   private sdk: SpotifyApi | null = null;
+  private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiresAt: number | null = null;
   private clientId: string = process.env.SPOTIFY_CLIENT_ID ?? '';
 
   setTokens(accessToken: string, tokenType: string, expiresIn: number, refreshToken: string): void {
+    this.accessToken = accessToken;
     this.sdk = SpotifyApi.withAccessToken(this.clientId, {
       access_token: accessToken,
       token_type: tokenType,
@@ -20,6 +22,33 @@ export class SpotifyService implements IMusicSource {
     // Token expires in `expiresIn` seconds from now
     this.tokenExpiresAt = Date.now() + expiresIn * 1000;
     console.log(`[Spotify] Token set, expires in ${expiresIn}s at ${new Date(this.tokenExpiresAt).toISOString()}`);
+  }
+
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
+  /** Calls Spotify's Web API to start playback on a specific device (Premium only). */
+  async playOnDevice(deviceId: string, spotifyUri: string): Promise<void> {
+    if (!this.accessToken) {
+      throw new Error('Spotify no autenticado');
+    }
+    const response = await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: [spotifyUri] }),
+      },
+    );
+    // 204 No Content = success; 404 device not found; 403 Premium required
+    if (!response.ok && response.status !== 204) {
+      const raw = await response.text();
+      throw new Error(`Spotify play failed (${response.status}): ${raw}`);
+    }
   }
 
   private isTokenExpired(): boolean {
@@ -111,6 +140,7 @@ export class SpotifyService implements IMusicSource {
   clearTokens(): void {
     console.log("[Spotify] Clearing tokens");
     this.sdk = null;
+    this.accessToken = null;
     this.refreshToken = null;
     this.tokenExpiresAt = null;
   }
