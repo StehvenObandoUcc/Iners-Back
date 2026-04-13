@@ -7,5 +7,5 @@ export interface PlaylistStateDTO {
   upNext: SongDTO[];
   history: SongDTO[];
   repeatMode: RepeatMode;
-  isPlaying: boolean;
+  shuffle: boolean;
 }
