@@ -9,8 +9,10 @@ export const createPlaylistRoutes = (controller: PlaylistController): Router => 
   router.post('/add/first', asyncWrapper(controller.addSongFirst.bind(controller)));
   router.post('/add/last', asyncWrapper(controller.addSongLast.bind(controller)));
   router.post('/add/at/:position', asyncWrapper(controller.addSongAt.bind(controller)));
+  router.post('/load', asyncWrapper(controller.loadCollection.bind(controller)));
   router.delete('/:id', asyncWrapper(controller.removeSong.bind(controller)));
   router.post('/up-next/:id', asyncWrapper(controller.enqueueUpNext.bind(controller)));
+  router.put('/up-next', asyncWrapper(controller.replaceUpNext.bind(controller)));
 
   return router;
 };
