@@ -26,4 +26,20 @@ export class UpNextQueue {
   toArray(): Song[] {
     return [...this.queue];
   }
+
+  removeById(songId: number): boolean {
+    const index = this.queue.findIndex((song) => song.id === songId);
+    if (index === -1) return false;
+    this.queue.splice(index, 1);
+    return true;
+  }
+
+  replace(songs: Song[]): void {
+    this.queue.length = 0;
+    this.queue.push(...songs);
+  }
+
+  clear(): void {
+    this.queue.length = 0;
+  }
 }
