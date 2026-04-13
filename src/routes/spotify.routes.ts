@@ -9,6 +9,8 @@ export const createSpotifyRoutes = (controller: SpotifyAuthController): Router =
   router.get('/callback', asyncWrapper(controller.callback.bind(controller)));
   router.get('/status', controller.status.bind(controller));
   router.post('/logout', controller.logout.bind(controller));
+  router.get('/token', controller.getToken.bind(controller));
+  router.post('/play', asyncWrapper(controller.playTrack.bind(controller)));
 
   return router;
 };
