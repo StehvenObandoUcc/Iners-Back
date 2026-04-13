@@ -30,4 +30,15 @@ export class SongHistory {
   toArray(): Song[] {
     return [...this.stack].reverse();
   }
+
+  removeById(songId: number): boolean {
+    const index = this.stack.findIndex((song) => song.id === songId);
+    if (index === -1) return false;
+    this.stack.splice(index, 1);
+    return true;
+  }
+
+  clear(): void {
+    this.stack.length = 0;
+  }
 }
