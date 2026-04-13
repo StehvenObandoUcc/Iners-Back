@@ -39,6 +39,30 @@ export class SongRepository {
     return this.repo.findOne({ where: { filePathOrUri } });
   }
 
+  async findByIds(ids: number[]): Promise<Song[]> {
+    if (ids.length === 0) return [];
+    return this.repo
+      .createQueryBuilder('song')
+      .where('song.id IN (:...ids)', { ids })
+      .getMany();
+  }
+
+  async findByArtistId(artistId: number): Promise<Song[]> {
+    return this.repo.find({ where: { artistId }, order: { title: 'ASC' } });
+  }
+
+  async findByAlbumId(albumId: number): Promise<Song[]> {
+    return this.repo.find({ where: { albumId }, order: { playlistPosition: 'ASC', title: 'ASC' } });
+  }
+
+  async countByArtistId(artistId: number): Promise<number> {
+    return this.repo.count({ where: { artistId } });
+  }
+
+  async countByAlbumId(albumId: number): Promise<number> {
+    return this.repo.count({ where: { albumId } });
+  }
+
   async save(song: Partial<Song>): Promise<Song> {
     return this.repo.save(song);
   }
@@ -58,5 +82,29 @@ export class SongRepository {
   async deleteById(id: number): Promise<boolean> {
     const result = await this.repo.delete({ id });
     return (result.affected ?? 0) > 0;
+  }
+
+  async findByHash(hash: string): Promise<Song | null> {
+    return this.repo.findOne({ where: { hash } });
+  }
+
+  async toggleFavorite(id: number): Promise<Song | null> {
+    const song = await this.repo.findOne({ where: { id } });
+    if (!song) return null;
+    song.isFavorite = !song.isFavorite;
+    return this.repo.save(song);
+  }
+
+  async findFavorites(): Promise<Song[]> {
+    return this.repo.find({ where: { isFavorite: true }, order: { title: 'ASC' } });
+  }
+
+  async setHasLyrics(id: number, value: boolean): Promise<void> {
+    await this.repo.update({ id }, { hasLyrics: value });
+  }
+
+  async updateMetadata(id: number, patch: Partial<Song>): Promise<Song | null> {
+    await this.repo.update({ id }, patch);
+    return this.findById(id);
   }
 }
