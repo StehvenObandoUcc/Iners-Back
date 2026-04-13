@@ -11,6 +11,7 @@ export const createPlayerRoutes = (controller: PlayerController): Router => {
   router.post('/play', asyncWrapper(controller.play.bind(controller)));
   router.post('/pause', asyncWrapper(controller.pause.bind(controller)));
   router.patch('/repeat', asyncWrapper(controller.setRepeatMode.bind(controller)));
+  router.patch('/shuffle', asyncWrapper(controller.toggleShuffle.bind(controller)));
   router.get('/stream/:id', asyncWrapper(controller.streamAudio.bind(controller)));
   router.post('/play-now/:id', asyncWrapper(controller.playNow.bind(controller)));
 
