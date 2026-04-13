@@ -4,7 +4,11 @@ import { HttpError } from '../errors/HttpError';
 import { SpotifyService } from '../services/SpotifyService';
 
 export class SpotifyAuthController {
-  constructor(private readonly spotifyService: SpotifyService) {}
+  private readonly frontendUrl: string;
+
+  constructor(private readonly spotifyService: SpotifyService) {
+    this.frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+  }
 
   authorize(_req: Request, res: Response): void {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
@@ -13,14 +17,21 @@ export class SpotifyAuthController {
       throw new HttpError(500, 'Faltan variables SPOTIFY_CLIENT_ID o SPOTIFY_REDIRECT_URI');
     }
 
-    const scope = encodeURIComponent('user-read-private streaming user-library-read');
+    // Include Web Playback SDK scope for Premium users
+    const scopes = [
+      'user-read-private',
+      'streaming',
+      'user-library-read',
+      'user-read-playback-state',
+      'user-modify-playback-state',
+    ].join(' ');
 
     const url =
       'https://accounts.spotify.com/authorize' +
-      `?client_id=${clientId}` +
+      `?client_id=${encodeURIComponent(clientId)}` +
       '&response_type=code' +
-      `&redirect_uri=${encodeURIComponent(redirectUri ?? '')}` +
-      `&scope=${scope}`;
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&scope=${encodeURIComponent(scopes)}`;
 
     res.redirect(url);
   }
@@ -33,9 +44,15 @@ export class SpotifyAuthController {
       throw new HttpError(500, 'Faltan variables SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET o SPOTIFY_REDIRECT_URI');
     }
 
+    // User cancelled the auth flow in Spotify
+    if (req.query.error) {
+      res.redirect(`${this.frontendUrl}?spotify=cancelled`);
+      return;
+    }
+
     const code = req.query.code as string | undefined;
     if (!code) {
-      res.status(400).json({ success: false, data: null, error: 'Code no encontrado' } satisfies ApiResponse<never>);
+      res.redirect(`${this.frontendUrl}?spotify=error&reason=no_code`);
       return;
     }
 
@@ -59,7 +76,8 @@ export class SpotifyAuthController {
 
     if (!tokenResponse.ok) {
       const rawError = await tokenResponse.text();
-      res.status(400).json({ success: false, data: null, error: rawError } satisfies ApiResponse<never>);
+      console.error('[Spotify] Token exchange failed:', rawError);
+      res.redirect(`${this.frontendUrl}?spotify=error&reason=token_exchange`);
       return;
     }
 
@@ -77,7 +95,8 @@ export class SpotifyAuthController {
       tokens.refresh_token,
     );
 
-    res.status(200).json({ success: true, data: { authenticated: true }, error: null } satisfies ApiResponse<{ authenticated: boolean }>);
+    // Redirect back to the SPA with success flag
+    res.redirect(`${this.frontendUrl}?spotify=connected`);
   }
 
   status(_req: Request, res: Response): void {
@@ -95,5 +114,28 @@ export class SpotifyAuthController {
       data: { authenticated: false },
       error: null,
     } satisfies ApiResponse<{ authenticated: boolean }>);
+  }
+
+  /** Returns the current access token so the frontend Spotify Web Playback SDK can use it. */
+  getToken(_req: Request, res: Response): void {
+    const accessToken = this.spotifyService.getAccessToken();
+    if (!accessToken) {
+      throw new HttpError(401, 'No hay sesión Spotify activa');
+    }
+    res.status(200).json({
+      success: true,
+      data: { accessToken },
+      error: null,
+    } satisfies ApiResponse<{ accessToken: string }>);
+  }
+
+  /** Tells Spotify to start playing a URI on a given Spotify Connect device (Premium only). */
+  async playTrack(req: Request, res: Response): Promise<void> {
+    const { deviceId, spotifyUri } = req.body as { deviceId?: string; spotifyUri?: string };
+    if (!deviceId || !spotifyUri) {
+      throw new HttpError(400, 'deviceId y spotifyUri son requeridos');
+    }
+    await this.spotifyService.playOnDevice(deviceId, spotifyUri);
+    res.status(204).end();
   }
 }
