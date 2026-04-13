@@ -206,4 +206,11 @@ export class DoublyLinkedPlaylist {
   isEmpty(): boolean {
     return this._size === 0;
   }
+
+  clear(): void {
+    this.head = null;
+    this.tail = null;
+    this.current = null;
+    this._size = 0;
+  }
 }
