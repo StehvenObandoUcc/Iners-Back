@@ -48,4 +48,23 @@ export class PlaylistController {
     const response: ApiResponse<PlaylistStateDTO> = { success: true, data: state, error: null };
     res.status(200).json(response);
   }
+
+  async replaceUpNext(req: Request, res: Response): Promise<void> {
+    const { songIds } = req.body as { songIds?: number[] };
+    const state = await this.playlistService.replaceUpNext(
+      Array.isArray(songIds) ? songIds.map(Number) : [],
+    );
+    const response: ApiResponse<PlaylistStateDTO> = { success: true, data: state, error: null };
+    res.status(200).json(response);
+  }
+
+  async loadCollection(req: Request, res: Response): Promise<void> {
+    const { songIds, startSongId } = req.body as { songIds?: number[]; startSongId?: number };
+    const state = await this.playlistService.loadCollection(
+      Array.isArray(songIds) ? songIds.map(Number) : [],
+      startSongId !== undefined ? Number(startSongId) : undefined,
+    );
+    const response: ApiResponse<PlaylistStateDTO> = { success: true, data: state, error: null };
+    res.status(200).json(response);
+  }
 }
