@@ -228,7 +228,10 @@ export class SongController {
     const offset = Math.max(Number(req.query.offset ?? 0), 0);
 
     const songs = await this.spotifyService.search(query, limit, offset);
-    res.status(200).json({ success: true, data: songs, error: null } satisfies ApiResponse<Song[]>);
+    const persistedSongs = await Promise.all(
+      songs.map((song) => this.songCatalogService.ensureSpotifySong(song)),
+    );
+    res.status(200).json({ success: true, data: persistedSongs, error: null } satisfies ApiResponse<Song[]>);
   }
 
   async toggleFavorite(req: Request, res: Response): Promise<void> {
