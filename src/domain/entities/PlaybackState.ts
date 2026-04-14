@@ -31,6 +31,6 @@ export class PlaybackState {
   @Column({ default: false })
   shuffle!: boolean;
 
-  @Column({ type: 'integer', default: Date.now() })
+  @Column({ type: 'bigint', default: Date.now() })
   updatedAt!: number;
 }
