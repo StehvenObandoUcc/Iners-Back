@@ -1,4 +1,5 @@
 import { DataSource, Repository } from 'typeorm';
+import { MusicSource } from '../domain/enums/MusicSource';
 import { Artist } from '../domain/entities/Artist';
 
 export class ArtistRepository {
@@ -28,8 +29,15 @@ export class ArtistRepository {
     return this.repo.save(artist);
   }
 
-  async findAll(): Promise<Artist[]> {
-    return this.repo.find({ order: { name: 'ASC' } });
+  async findAllWithLocalSongs(): Promise<Artist[]> {
+    return this.repo
+      .createQueryBuilder('artist')
+      .innerJoin('songs', 'song', 'song.artistId = artist.id AND song.source = :source', {
+        source: MusicSource.LOCAL,
+      })
+      .orderBy('artist.name', 'ASC')
+      .distinct(true)
+      .getMany();
   }
 
   async updateImage(id: number, imageUrl: string): Promise<void> {
