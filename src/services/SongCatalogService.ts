@@ -266,6 +266,42 @@ export class SongCatalogService {
     return this.songRepo.findByHash(hash);
   }
 
+  async ensureSpotifySong(song: Song): Promise<Song> {
+    const spotifyTrackId = song.spotifyTrackId?.trim();
+    if (!spotifyTrackId) {
+      throw new HttpError(400, 'La cancion de Spotify no tiene spotifyTrackId');
+    }
+
+    const existing = await this.songRepo.findBySpotifyTrackId(spotifyTrackId);
+    if (existing) {
+      const patch: Partial<Song> = {};
+
+      if (existing.title !== song.title) patch.title = song.title;
+      if (existing.artist !== song.artist) patch.artist = song.artist;
+      if (existing.album !== song.album) patch.album = song.album;
+      if (existing.durationSeconds !== song.durationSeconds) patch.durationSeconds = song.durationSeconds;
+      if (existing.coverImageUrl !== song.coverImageUrl) patch.coverImageUrl = song.coverImageUrl;
+      if (existing.filePathOrUri !== song.filePathOrUri) patch.filePathOrUri = song.filePathOrUri;
+
+      if (Object.keys(patch).length === 0) {
+        return existing;
+      }
+
+      return (await this.songRepo.updateMetadata(existing.id, patch)) ?? existing;
+    }
+
+    return this.createSong({
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      durationSeconds: song.durationSeconds,
+      source: MusicSource.SPOTIFY,
+      filePathOrUri: song.filePathOrUri,
+      spotifyTrackId,
+      coverImageUrl: song.coverImageUrl,
+    });
+  }
+
   async toggleFavorite(id: number): Promise<Song | null> {
     const song = await this.songRepo.toggleFavorite(id);
     if (!song) return null;
