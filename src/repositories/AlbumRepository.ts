@@ -1,4 +1,5 @@
 import { DataSource, Repository } from 'typeorm';
+import { MusicSource } from '../domain/enums/MusicSource';
 import { Album } from '../domain/entities/Album';
 
 export class AlbumRepository {
@@ -39,12 +40,28 @@ export class AlbumRepository {
     return this.repo.save(album);
   }
 
-  async findAll(): Promise<Album[]> {
-    return this.repo.find({ order: { title: 'ASC' } });
+  async findAllWithLocalSongs(): Promise<Album[]> {
+    return this.repo
+      .createQueryBuilder('album')
+      .innerJoin('songs', 'song', 'song.albumId = album.id AND song.source = :source', {
+        source: MusicSource.LOCAL,
+      })
+      .orderBy('album.title', 'ASC')
+      .distinct(true)
+      .getMany();
   }
 
-  async findByArtist(artistId: number): Promise<Album[]> {
-    return this.repo.find({ where: { artistId }, order: { year: 'DESC', title: 'ASC' } });
+  async findByArtistWithLocalSongs(artistId: number): Promise<Album[]> {
+    return this.repo
+      .createQueryBuilder('album')
+      .innerJoin('songs', 'song', 'song.albumId = album.id AND song.source = :source', {
+        source: MusicSource.LOCAL,
+      })
+      .where('album.artistId = :artistId', { artistId })
+      .orderBy('album.year', 'DESC')
+      .addOrderBy('album.title', 'ASC')
+      .distinct(true)
+      .getMany();
   }
 
   async delete(id: number): Promise<void> {
