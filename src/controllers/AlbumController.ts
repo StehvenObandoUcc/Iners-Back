@@ -15,28 +15,30 @@ export class AlbumController {
   ) {}
 
   async listAlbums(_req: Request, res: Response): Promise<void> {
-    const albums = await this.albumRepo.findAll();
+    const albums = await this.albumRepo.findAllWithLocalSongs();
     res.status(200).json({ success: true, data: albums, error: null } satisfies ApiResponse<Album[]>);
   }
 
   async getAlbum(req: Request, res: Response): Promise<void> {
     const id = Number(req.params.id);
     const album = await this.albumRepo.findById(id);
-    if (!album) throw new HttpError(404, 'Album no encontrado');
+    const localSongCount = album ? await this.songRepo.countLocalByAlbumId(id) : 0;
+    if (!album || localSongCount === 0) throw new HttpError(404, 'Album no encontrado');
     res.status(200).json({ success: true, data: album, error: null } satisfies ApiResponse<Album>);
   }
 
   async getAlbumSongs(req: Request, res: Response): Promise<void> {
     const albumId = Number(req.params.id);
     const album = await this.albumRepo.findById(albumId);
-    if (!album) throw new HttpError(404, 'Album no encontrado');
-    const songs = await this.songRepo.findByAlbumId(albumId);
+    const localSongCount = album ? await this.songRepo.countLocalByAlbumId(albumId) : 0;
+    if (!album || localSongCount === 0) throw new HttpError(404, 'Album no encontrado');
+    const songs = await this.songRepo.findLocalByAlbumId(albumId);
     res.status(200).json({ success: true, data: songs, error: null } satisfies ApiResponse<Song[]>);
   }
 
   async getByArtist(req: Request, res: Response): Promise<void> {
     const artistId = Number(req.params.artistId);
-    const albums = await this.albumRepo.findByArtist(artistId);
+    const albums = await this.albumRepo.findByArtistWithLocalSongs(artistId);
     res.status(200).json({ success: true, data: albums, error: null } satisfies ApiResponse<Album[]>);
   }
 
