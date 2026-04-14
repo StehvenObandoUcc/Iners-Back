@@ -328,11 +328,10 @@ export class PlaylistService {
   }
 
   private async toDTO(song: Song): Promise<SongDTO> {
-    const sourceService = this.resolveSource(song.source);
     const streamUrl =
       song.source === MusicSource.LOCAL
         ? `/api/player/stream/${song.id}`
-        : await sourceService.getStreamUrl(song.filePathOrUri ?? '');
+        : (song.filePathOrUri ?? '');
     const normalized = this.normalizeDisplayMetadata(song);
 
     return {
