@@ -379,4 +379,33 @@ export class SongCatalogService {
     await this.deleteFullyById(id);
     return true;
   }
+
+  async pruneMissingLocalFiles(): Promise<void> {
+    console.log('[SongCatalog] Buscando canciones fantasma locales para limpiar base de datos...');
+    const allSongs = await this.songRepo.findAllOrderedByPosition();
+    const localSongs = allSongs.filter((s: Song) => s.source === MusicSource.LOCAL);
+    let deletedCount = 0;
+
+    for (const song of localSongs) {
+      if (song.filePathOrUri && !song.filePathOrUri.startsWith('http://') && !song.filePathOrUri.startsWith('https://')) {
+        // En este entorno, filePathOrUri suele empezar relativo a `music/` o absoluto temporal.
+        let actualPath = song.filePathOrUri;
+        if (!path.isAbsolute(actualPath)) {
+            actualPath = path.resolve(process.cwd(), 'music', song.filePathOrUri);
+        }
+        
+        if (!fs.existsSync(actualPath)) {
+          console.log(`[SongCatalog] Eliminando canción fantasma (solo estaba en BD): ${song.title} - ${actualPath}`);
+          await this.deleteFullyById(song.id);
+          deletedCount++;
+        }
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`[SongCatalog] Mantenimiento: ${deletedCount} canciones fantasmas eliminadas de la base de datos.`);
+    } else {
+      console.log('[SongCatalog] Todo correcto. No se encontraron canciones locales rotas.');
+    }
+  }
 }

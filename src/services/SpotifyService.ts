@@ -18,7 +18,7 @@ export class SpotifyService implements IMusicSource {
   private clientId: string = process.env.SPOTIFY_CLIENT_ID ?? '';
 
   constructor() {
-    this.loadPersistedSession();
+    this.loadPersistedSession().catch((err) => console.error('[Spotify] Initialization error:', err));
   }
 
   setTokens(accessToken: string, tokenType: string, expiresIn: number, refreshToken: string): void {
@@ -43,6 +43,7 @@ export class SpotifyService implements IMusicSource {
 
   /** Calls Spotify's Web API to start playback on a specific device (Premium only). */
   async playOnDevice(deviceId: string, spotifyUri: string): Promise<void> {
+    await this.ensureValidToken();
     console.log(`[Spotify] Starting playback on device ${deviceId} for ${spotifyUri}`);
     await this.waitForDevice(deviceId);
     await this.transferPlayback(deviceId, true);
@@ -146,7 +147,20 @@ export class SpotifyService implements IMusicSource {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private isTokenExpired(): boolean {
+    if (!this.tokenExpiresAt) return true; // Treat missing expiration as expired if we are tracking it, but wait, let's say true if it's less than 5 minutes out
+    return Date.now() >= this.tokenExpiresAt - 5 * 60 * 1000;
+  }
+
+  private async ensureValidToken(): Promise<void> {
+    if (this.isTokenExpired() && this.refreshToken) {
+      console.log('[Spotify] Token is expired or about to expire, refreshing automatically...');
+      await this.refreshTokens(this.refreshToken);
+    }
+  }
+
   private async spotifyFetch(url: string, init: RequestInit): Promise<Response> {
+    await this.ensureValidToken();
     if (!this.accessToken) {
       throw new Error('Spotify no autenticado');
     }
@@ -160,17 +174,8 @@ export class SpotifyService implements IMusicSource {
     });
   }
 
-  private isTokenExpired(): boolean {
-    if (!this.tokenExpiresAt) return false;
-    // Consider token expired if less than 5 minutes left
-    const expired = Date.now() >= this.tokenExpiresAt - 5 * 60 * 1000;
-    if (expired) {
-      console.warn('[Spotify] Token expired or about to expire');
-    }
-    return expired;
-  }
-
   async search(query: string, limit: number = 20, offset: number = 0): Promise<Song[]> {
+    await this.ensureValidToken();
     if (!this.sdk) {
       console.error('[Spotify] SDK not initialized - not authenticated');
       throw new Error('Spotify no autenticado');
@@ -204,6 +209,7 @@ export class SpotifyService implements IMusicSource {
   }
 
   async getStreamUrl(spotifyUri: string): Promise<string> {
+    await this.ensureValidToken();
     if (!this.sdk) {
       throw new Error('Spotify no autenticado');
     }
@@ -256,43 +262,101 @@ export class SpotifyService implements IMusicSource {
     this.deletePersistedSession();
   }
 
-  private loadPersistedSession(): void {
+  private async loadPersistedSession(): Promise<void> {
     try {
-      if (!fs.existsSync(SpotifyService.SESSION_FILE)) {
-        return;
-      }
-
-      const raw = fs.readFileSync(SpotifyService.SESSION_FILE, 'utf8');
-      const session = JSON.parse(raw) as {
+      const explicitRefreshToken = process.env.SPOTIFY_REFRESH_TOKEN;
+      let session: {
         accessToken?: string;
         tokenType?: string;
         refreshToken?: string;
         expiresAt?: number;
-      };
+      } = {};
 
-      if (!session.accessToken || !session.tokenType || !session.refreshToken || !session.expiresAt) {
-        return;
+      if (fs.existsSync(SpotifyService.SESSION_FILE)) {
+        const raw = fs.readFileSync(SpotifyService.SESSION_FILE, 'utf8');
+        session = JSON.parse(raw);
       }
 
-      const expiresIn = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
-      if (expiresIn <= 0) {
-        this.deletePersistedSession();
+      const refreshTokenToUse = session.refreshToken || explicitRefreshToken;
+
+      // If we have a refresh token but it's expired or missing an access token, refresh it
+      if (refreshTokenToUse) {
+        const nowMs = Date.now();
+        const expiresAt = session.expiresAt || 0;
+        
+        // If expired or missing token data
+        if (!session.accessToken || !session.tokenType || expiresAt <= nowMs) {
+           console.log('[Spotify] Token missing or expired, attempting to refresh...');
+           const success = await this.refreshTokens(refreshTokenToUse);
+           if (!success) {
+             console.warn('[Spotify] Could not refresh token. Session cleared.');
+             this.deletePersistedSession();
+           }
+           return;
+        }
+
+        const expiresIn = Math.max(0, Math.floor((expiresAt - nowMs) / 1000));
+        this.accessToken = session.accessToken ?? null;
+        this.tokenType = session.tokenType ?? null;
+        this.refreshToken = session.refreshToken ?? explicitRefreshToken ?? null;
+        this.tokenExpiresAt = session.expiresAt ?? null;
+        this.sdk = SpotifyApi.withAccessToken(this.clientId, {
+          access_token: session.accessToken!,
+          token_type: session.tokenType!,
+          expires_in: expiresIn,
+          refresh_token: this.refreshToken!,
+        });
+        console.log(`[Spotify] Restored session, expires at ${new Date(expiresAt).toISOString()}`);
         return;
       }
-
-      this.accessToken = session.accessToken;
-      this.tokenType = session.tokenType;
-      this.refreshToken = session.refreshToken;
-      this.tokenExpiresAt = session.expiresAt;
-      this.sdk = SpotifyApi.withAccessToken(this.clientId, {
-        access_token: session.accessToken,
-        token_type: session.tokenType,
-        expires_in: expiresIn,
-        refresh_token: session.refreshToken,
-      });
-      console.log(`[Spotify] Restored persisted session, expires at ${new Date(session.expiresAt).toISOString()}`);
     } catch (error) {
       console.warn('[Spotify] Failed to restore persisted session:', error);
+    }
+  }
+
+  private async refreshTokens(refreshToken: string): Promise<boolean> {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      console.warn('[Spotify] Missing client credentials to refresh token');
+      return false;
+    }
+
+    try {
+      const tokenUrl = 'https://accounts.spotify.com/api/token';
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      });
+
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+      const tokenResponse = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      });
+
+      if (!tokenResponse.ok) {
+        console.error('[Spotify] Failed to refresh token:', await tokenResponse.text());
+        return false;
+      }
+
+      const tokens = (await tokenResponse.json()) as {
+        access_token: string;
+        token_type: string;
+        expires_in: number;
+        refresh_token?: string; // Sometimes refresh_token is re-issued
+      };
+
+      this.setTokens(tokens.access_token, tokens.token_type, tokens.expires_in, tokens.refresh_token || refreshToken);
+      return true;
+    } catch (e) {
+      console.error('[Spotify] Exception during token refresh:', e);
+      return false;
     }
   }
 

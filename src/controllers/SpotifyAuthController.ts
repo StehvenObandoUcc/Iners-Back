@@ -10,12 +10,13 @@ export class SpotifyAuthController {
     this.frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   }
 
-  authorize(_req: Request, res: Response): void {
+  authorize(req: Request, res: Response): void {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
     if (!clientId || !redirectUri) {
       throw new HttpError(500, 'Faltan variables SPOTIFY_CLIENT_ID o SPOTIFY_REDIRECT_URI');
     }
+    const forceDialog = String(req.query.force ?? '').toLowerCase() === 'true';
 
     // Include Web Playback SDK scope for Premium users
     const scopes = [
@@ -31,7 +32,8 @@ export class SpotifyAuthController {
       `?client_id=${encodeURIComponent(clientId)}` +
       '&response_type=code' +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=${encodeURIComponent(scopes)}`;
+      `&scope=${encodeURIComponent(scopes)}` +
+      (forceDialog ? '&show_dialog=true' : '');
 
     res.redirect(url);
   }

@@ -82,6 +82,7 @@ const bootstrap = async (): Promise<void> => {
     userPlaylistRepository,
   );
 
+  await songCatalogService.pruneMissingLocalFiles();
   await playlistService.loadFromDB();
 
   // ── Controllers ──────────────────────────────────────────────────────────────
