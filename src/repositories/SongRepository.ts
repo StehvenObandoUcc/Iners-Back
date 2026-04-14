@@ -51,8 +51,30 @@ export class SongRepository {
     return this.repo.find({ where: { artistId }, order: { title: 'ASC' } });
   }
 
+  async findLocalByArtistId(artistId: number): Promise<Song[]> {
+    return this.repo.find({
+      where: { artistId, source: MusicSource.LOCAL },
+      order: { title: 'ASC' },
+    });
+  }
+
   async findByAlbumId(albumId: number): Promise<Song[]> {
     return this.repo.find({ where: { albumId }, order: { playlistPosition: 'ASC', title: 'ASC' } });
+  }
+
+  async findLocalByAlbumId(albumId: number): Promise<Song[]> {
+    return this.repo.find({
+      where: { albumId, source: MusicSource.LOCAL },
+      order: { playlistPosition: 'ASC', title: 'ASC' },
+    });
+  }
+
+  async countLocalByArtistId(artistId: number): Promise<number> {
+    return this.repo.count({ where: { artistId, source: MusicSource.LOCAL } });
+  }
+
+  async countLocalByAlbumId(albumId: number): Promise<number> {
+    return this.repo.count({ where: { albumId, source: MusicSource.LOCAL } });
   }
 
   async countByArtistId(artistId: number): Promise<number> {
