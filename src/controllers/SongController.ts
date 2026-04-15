@@ -77,7 +77,7 @@ export class SongController {
       const coverName = `${hash.substring(0, 16)}.${coverExt}`;
       const coverPath = path.join(coversDir, coverName);
       fs.writeFileSync(coverPath, meta.coverData.data);
-      coverImageUrl = `http://localhost:3000/covers/${coverName}`;
+      coverImageUrl = `${process.env.BACKEND_URL || "http://localhost:3000"}/covers/${coverName}`;
     }
 
     // ── Save audio file ──────────────────────────────────────────────────────

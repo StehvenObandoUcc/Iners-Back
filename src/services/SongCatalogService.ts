@@ -236,7 +236,7 @@ export class SongCatalogService {
       fs.writeFileSync(coverPath, coverData.data);
     }
 
-    return `http://localhost:3000/covers/${coverName}`;
+    return `${process.env.BACKEND_URL || "http://localhost:3000"}/covers/${coverName}`;
   }
 
   private async backfillExistingSong(
